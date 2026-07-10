@@ -1,0 +1,29 @@
+{
+	"manifest_version": 3,
+	"version": "1.0",
+	"name": "Simple VRC.TL DMX event tag extension",
+	"description": "Very helpful tag system",
+
+	"content_scripts": [
+		{"js": ["js/contentscript.js"], "matches": ["*://vrc.tl/*"]}
+	],
+
+	"icons": {
+		"16": "images/icon16.png",
+		"32": "images/icon32.png",
+		"48": "images/icon48.png",
+		"96": "images/icon96.png",
+		"256": "images/icon256.png"
+	},
+
+	"web_accessible_resources": [{
+		"resources": ["js/foreground.js", "images/icon-timeline-512.png"],
+		"matches":["<all_urls>"]
+	}],
+
+	"browser_specific_settings": {
+		"gecko": {
+			"id": "simple-vrc-tl-dmx-tag@miniontoby.github.io"
+		}
+	}
+}
