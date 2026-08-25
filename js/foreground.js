@@ -1,12 +1,12 @@
 const iconURL = document.currentScript?.dataset?.fileLink ?? '';
 
 if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWith('/admin/')) {
+	if (typeof window.eventData === 'undefined') window.eventData = null;
+
 	// Only observe the top level DOM changes (aka only the events, not their tags or their AddToMainline button)
 	const config = { childList: true, attributes: false, subtree: false };
-	let observeChangeTimeout = null, checkIfFoundInterval = null;
-	let timelineGrid = null;
-
-	if (typeof window.eventData === 'undefined') window.eventData = null;
+	let observeChangeTimeout = null, observeChangeTimeout2 = null, checkIfFoundInterval = null, checkIfFoundInterval2 = null;
+	let reactRoot = null, timelineGrid = null;
 
 	const ourBadgeImage = document.createElement('img');
 	ourBadgeImage.className = 'h-full';
@@ -26,6 +26,9 @@ if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWit
 	ourBadge.id = 'dmx-event-badge';
 	ourBadge.appendChild(ourBadgeHolder);
 
+	const ourBadgeDrawer = ourBadge.cloneNode(true);
+	ourBadgeDrawer.className = ourBadgeDrawer.className.replace('text-[0.6rem] ', ''); // needs bigger text ;)
+
 	async function updateEventData() {
 		if (!timelineGrid) {
 			if (checkIfFoundInterval === null)
@@ -36,11 +39,11 @@ if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWit
 
 		if (window.eventData !== null) {
 			data = window.eventData;
-			window.eventData = null;
 		} else {
 			const response = await fetch('/api/v1/events');
 			try {
 				data = await response.json();
+				window.eventData = data;
 			} catch {}
 		}
 
@@ -69,12 +72,48 @@ if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWit
 		}
 	}
 
+	async function updateDrawer() {
+		const drawer = document.querySelector('div[data-cm=drawer-component]');
+		if (drawer) {
+			observer.observe(drawer, config);
+			const eventId = Number(drawer.dataset?.key?.replace('event-detail-', '') ?? '');
+			let event = window.eventData?.eventData?.events?.find?.((event) => event.id === eventId);
+			if (!event) {
+				const desc = drawer.querySelector('div.px-6.text-gr-200.pointer-events-auto');
+				if (desc) {
+					// observe to check for the expanded description
+					observer.observe(desc, config);
+					event = { fromHTML: true, description: desc?.innerText };
+				}
+			}
+			if (event?.description) {
+				if (event.description.toLowerCase().includes('#dmx-event')) {
+					console.log(event);
+					const badgeHolderElement = drawer.querySelector('div.flex.flex-wrap');
+					if (!badgeHolderElement) {
+						console.error('Could not find the badge holder element in', eventElement, event);
+						return;
+					}
+					if (!badgeHolderElement.querySelector('#dmx-event-badge'))
+						badgeHolderElement.appendChild(ourBadgeDrawer);
+				}
+			}
+		}
+	}
+
 	const observer = new MutationObserver((mutationList, observer) => {
 		for (const mutation of mutationList) {
 			if (mutation.type === 'childList') {
 				if (mutation.target === timelineGrid) {
 					clearTimeout(observeChangeTimeout);
 					observeChangeTimeout = setTimeout(updateEventData, 1e3);
+				} else if (mutation.target === reactRoot || mutation.target?.dataset?.cm === 'drawer-component') {
+					clearTimeout(observeChangeTimeout2);
+					updateDrawer();
+				} else if (mutation.target?.className.includes('px-6 text-gr-200 pointer-events-auto')) {
+					// Expanded description
+					clearTimeout(observeChangeTimeout2);
+					updateDrawer();
 				} else {
 					console.log('how did this mutation get observed?', mutation);
 				}
@@ -84,19 +123,33 @@ if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWit
 		}
 	});
 
+	function findReactRoot() {
+		reactRoot = document.querySelector("#react-root > div > div.relative");
+		if (!reactRoot) return;
+
+		clearInterval(checkIfFoundInterval);
+		observer.observe(reactRoot, config);
+		checkIfFoundInterval = null;
+
+		checkIfFoundInterval2 = setInterval(findTimelineGrid, 1e3);
+	}
+
 	function findTimelineGrid() {
 		timelineGrid = document.querySelector('div[data-cn=grid] > div[data-cn=grid-content] > div.grid');
 		if (!timelineGrid) return;
 
-		clearInterval(checkIfFoundInterval);
+		clearInterval(checkIfFoundInterval2);
 		observer.observe(timelineGrid, config);
-		checkIfFoundInterval = null;
+		checkIfFoundInterval2 = null;
 
 		clearTimeout(observeChangeTimeout);
 		observeChangeTimeout = setTimeout(updateEventData, 1e3);
+
+		clearTimeout(observeChangeTimeout2);
+		observeChangeTimeout2 = setTimeout(updateDrawer, 2e3);
 	}
 
-	checkIfFoundInterval = setInterval(findTimelineGrid, 1e3);
+	checkIfFoundInterval = setInterval(findReactRoot, 1e3);
 
 	// modified.js has extra code to call this function:
 	/*
