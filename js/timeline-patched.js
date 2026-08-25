@@ -1,14 +1,16 @@
 try {
-	const regex = /<script id="tl-script" src="\/(dist\/[^"]+\.js)"/;
+	const scriptRegex = /<script id="tl-script" src="\/(dist\/[^"]+\.js)"/;
+	const classRegex = /class ([^ {]+){[^{}]+;events=new /;
 	const response = await (await fetch('https://vrc.tl')).text();
-	const originalScriptUrl = 'https://vrc.tl/' + regex.exec(response)[1];
-	let originalCode = await (await fetch(originalScriptUrl)).text();
+	const originalScriptUrl = 'https://vrc.tl/' + scriptRegex.exec(response)[1];
+	const originalCode = await (await fetch(originalScriptUrl)).text();
+	const className = (classRegex.exec(originalCode)?.[1] ?? 'a0');
 
 	eval(originalCode + `
 if (document.readyState !== 'loading') document.dispatchEvent(new Event('DOMContentLoaded'));
 try {
 	window.eventData = null;
-	window.eventsManager = v1.get(a0).events;
+	window.eventsManager = v1.get(` + className + `).events;
 	const orig = eventsManager.__proto__.getByDay.bind(eventsManager);
 	window.onGetByDay = async function(result) {
 		window.eventData = await result;
