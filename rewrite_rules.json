@@ -1,0 +1,14 @@
+[
+	{
+		"id": 1,
+		"priority": 1,
+		"action": {
+			"type": "redirect",
+			"redirect": { "extensionPath": "/js/timeline-patched.js" }
+		},
+		"condition": {
+			"regexFilter": "^https?://vrc\\.tl/dist/timeline-[^/]+\\.js$",
+			"resourceTypes": ["script"]
+		}
+	}
+]

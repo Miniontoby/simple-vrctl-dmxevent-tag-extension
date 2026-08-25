@@ -6,6 +6,8 @@ if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWit
 	let observeChangeTimeout = null, checkIfFoundInterval = null;
 	let timelineGrid = null;
 
+	if (typeof window.eventData === 'undefined') window.eventData = null;
+
 	const ourBadgeImage = document.createElement('img');
 	ourBadgeImage.className = 'h-full';
 	ourBadgeImage.src = iconURL;
@@ -30,12 +32,17 @@ if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWit
 				checkIfFoundInterval = setInterval(findTimelineGrid, 1e3);
 			return;
 		}
-
-		const response = await fetch('/api/v1/events');
 		let data = {};
-		try {
-			data = await response.json();
-		} catch {}
+
+		if (window.eventData !== null) {
+			data = window.eventData;
+			window.eventData = null;
+		} else {
+			const response = await fetch('/api/v1/events');
+			try {
+				data = await response.json();
+			} catch {}
+		}
 
 		if (data?.eventData?.events) {
 			const dmxEvents = data.eventData.events
@@ -90,4 +97,19 @@ if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWit
 	}
 
 	checkIfFoundInterval = setInterval(findTimelineGrid, 1e3);
+
+	// modified.js has extra code to call this function:
+	/*
+window.eventData = null;
+window.eventsManager = v1.get(a0).events;
+const orig = eventsManager.__proto__.getByDay.bind(eventsManager);
+window.onGetByDay = async function(result) {
+	window.eventData = await result;
+};
+eventsManager.__proto__.getByDay = function(...args) {
+	const result = orig(...args);
+	window.onGetByDay(result);
+	return result
+}
+	*/
 }

@@ -29,3 +29,4 @@ Every restart of firefox you need to re-add it, thats just a firefox thingy.
 
 Technically you can use the same chrome zip/manifest on firefox, but just for officiality, I did make a custom manifest for firefox.
 
+We're now just patching the original javascript file to expose the variable that receives the eventdata and then just hooking into that.
