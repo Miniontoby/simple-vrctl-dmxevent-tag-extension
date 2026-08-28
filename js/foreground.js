@@ -135,7 +135,7 @@ if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWit
 	}
 
 	function findTimelineGrid() {
-		timelineGrid = document.querySelector('div[data-cn=grid] > div[data-cn=grid-content] > div.grid');
+		timelineGrid = document.querySelector('div[data-cn=grid] > div[data-cn=grid-content] > div.grid.grid-flow-dense');
 		if (!timelineGrid) return;
 
 		clearInterval(checkIfFoundInterval2);
