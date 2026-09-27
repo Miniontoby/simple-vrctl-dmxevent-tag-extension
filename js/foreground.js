@@ -1,7 +1,7 @@
 const iconURL = document.currentScript?.dataset?.fileLink ?? '';
 
 if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWith('/admin/')) {
-	if (typeof window.eventData === 'undefined') window.eventData = null;
+	if (typeof window.eventData === 'undefined') window.eventData = { events: null, organizersEvents: null };
 
 	// Only observe the top level DOM changes (aka only the events, not their tags or their AddToMainline button)
 	const config = { childList: true, attributes: false, subtree: false };
@@ -29,28 +29,43 @@ if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWit
 	const ourBadgeDrawer = ourBadge.cloneNode(true);
 	ourBadgeDrawer.className = ourBadgeDrawer.className.replace('text-[0.6rem] ', ''); // needs bigger text ;)
 
+	const ourBadgeClubEventListTag = document.createElement('div');
+	ourBadgeClubEventListTag.className = 'text-xs text-gr-250 w-max bg-green-550/[0.2] rounded-full px-2 py-px font-medium';
+	ourBadgeClubEventListTag.innerText = 'DMX Event';
+	const ourBadgeClubEventList = document.createElement('div');
+	ourBadgeClubEventList.id = 'dmx-event-badge';
+	ourBadgeClubEventList.appendChild(ourBadgeClubEventListTag);
+
+	function doesEventHaveADescription(event) {
+		return !!event?.description;
+	}
+	function isEventAnDMXEvent(event) {
+		if (!doesEventHaveADescription(event)) return false;
+		return event.description.toLowerCase().includes('#dmx-event');
+	}
+
 	async function updateEventData() {
 		if (!timelineGrid) {
 			if (checkIfFoundInterval === null)
 				checkIfFoundInterval = setInterval(findTimelineGrid, 1e3);
 			return;
 		}
-		let data = {};
+		let events = undefined;
 
-		if (window.eventData !== null) {
-			data = window.eventData;
+		if (window.eventData?.events !== null) {
+			events = window.eventData.events;
 		} else {
 			const response = await fetch('/api/v1/events');
 			try {
-				data = await response.json();
-				window.eventData = data;
+				events = (await response.json())?.eventData?.events;
+				window.eventData.events = data;
 			} catch {}
 		}
 
-		if (data?.eventData?.events) {
-			const dmxEvents = data.eventData.events
-				.filter((event) => event.description)
-				.filter((event) => event.description.toLowerCase().includes('#dmx-event'))
+		if (events !== undefined) {
+			const dmxEvents = events
+				.filter(doesEventHaveADescription) // A little less overhead
+				.filter(isEventAnDMXEvent)
 				;
 			console.log(dmxEvents);
 			if (dmxEvents.length > 0) {
@@ -76,18 +91,21 @@ if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWit
 		const drawer = document.querySelector('div[data-cm=drawer-component]');
 		if (drawer) {
 			observer.observe(drawer, config);
-			const eventId = Number(drawer.dataset?.key?.replace('event-detail-', '') ?? '');
-			let event = window.eventData?.eventData?.events?.find?.((event) => event.id === eventId);
-			if (!event) {
-				const desc = drawer.querySelector('div.px-6.text-gr-200.pointer-events-auto');
-				if (desc) {
-					// observe to check for the expanded description
-					observer.observe(desc, config);
-					event = { fromHTML: true, description: desc?.innerText };
+			const key = drawer.dataset?.key;
+			if (!key) return;
+
+			if (key.startsWith('event-detail-')) {
+				const eventId = Number(key.replace('event-detail-', ''));
+				let event = window.eventData?.events?.find?.((event) => event.id === eventId) ?? window.eventData?.organizersEvents?.find?.((event) => event.id === eventId);
+				if (!event) {
+					const desc = drawer.querySelector('div.px-6.text-gr-200.pointer-events-auto');
+					if (desc) {
+						// observe to check for the expanded description
+						observer.observe(desc, config);
+						event = { fromHTML: true, description: desc?.innerText };
+					}
 				}
-			}
-			if (event?.description) {
-				if (event.description.toLowerCase().includes('#dmx-event')) {
+				if (isEventAnDMXEvent(event)) {
 					console.log(event);
 					const badgeHolderElement = drawer.querySelector('div.flex.flex-wrap');
 					if (!badgeHolderElement) {
@@ -97,6 +115,22 @@ if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWit
 					if (!badgeHolderElement.querySelector('#dmx-event-badge'))
 						badgeHolderElement.appendChild(ourBadgeDrawer);
 				}
+			} else if (key.startsWith('organizer-detail-')) {
+				const scrollbars = drawer.querySelector('div[data-cm="drawer"] div[data-cm="scrollbars"]');
+				clearTimeout(observeChangeTimeout2);
+				observeChangeTimeout2 = setTimeout(() => {
+					const eventElements = Array.from(scrollbars.querySelectorAll('div.flex.flex-col.gap-y-6 > div.relative > div.relative.overflow-hidden > span'));
+					for (const eventElement of eventElements) {
+						const prop = Object.entries(eventElement).find(([k]) => k.startsWith('__reactFiber$'))?.[1];
+						const event = (prop?.return?.memoizedProps ?? prop?.return?.pendingProps)?.event; // prop.return is the non-visible parentElement of the react element.
+
+						if (isEventAnDMXEvent(event)) {
+							const badgeHoldingElement = eventElement.querySelector('div.flex.flex-col.flex-1 > div.text-nowrap.items-center');
+							if (!badgeHoldingElement.querySelector('#dmx-event-badge'))
+								badgeHoldingElement.appendChild(ourBadgeClubEventList.cloneNode(true));
+						}
+					}
+				}, 1e3);
 			}
 		}
 	}
@@ -110,7 +144,7 @@ if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWit
 				} else if (mutation.target === reactRoot || mutation.target?.dataset?.cm === 'drawer-component') {
 					clearTimeout(observeChangeTimeout2);
 					updateDrawer();
-				} else if (mutation.target?.className.includes('px-6 text-gr-200 pointer-events-auto')) {
+				} else if (mutation.target?.matches('.px-6.text-gr-200.pointer-events-auto')) {
 					// Expanded description
 					clearTimeout(observeChangeTimeout2);
 					updateDrawer();
@@ -151,17 +185,14 @@ if (window.location.hostname === 'vrc.tl' && !window.location.pathname.startsWit
 
 	checkIfFoundInterval = setInterval(findReactRoot, 1e3);
 
-	// modified.js has extra code to call this function:
+	// timeline-patched.js has extra code to call this function:
 	/*
-window.eventData = null;
+window.eventData = { events: null, organizersEvents: null };
 window.eventsManager = v1.get(a0).events;
 const orig = eventsManager.__proto__.getByDay.bind(eventsManager);
-window.onGetByDay = async function(result) {
-	window.eventData = await result;
-};
 eventsManager.__proto__.getByDay = function(...args) {
 	const result = orig(...args);
-	window.onGetByDay(result);
+	result.then(response => { window.eventData.events = response?.eventData?.events; });
 	return result
 }
 	*/
